@@ -3,7 +3,6 @@ use std::sync::Arc;
 use warp::Filter;
 
 mod db_constants;
-mod dbo;
 mod dto;
 mod handlers;
 mod time_utils;
