@@ -22,12 +22,12 @@ impl KeyName {
                     sk: "LSI-SK".to_owned(),
                 },
                 GSI1_NAME => KeyName {
-                    pk: "GSI1_PK".to_owned(),
-                    sk: "GSI1_SK".to_owned(),
+                    pk: "GSI1-PK".to_owned(),
+                    sk: "GSI1-SK".to_owned(),
                 },
                 GSI2_NAME => KeyName {
-                    pk: "GSI2_PK".to_owned(),
-                    sk: "GSI2_SK".to_owned(),
+                    pk: "GSI2-PK".to_owned(),
+                    sk: "GSI2-SK".to_owned(),
                 },
                 _ => panic!("Provided unknown index name"),
             },
