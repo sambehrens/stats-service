@@ -1,5 +1,5 @@
 use crate::{
-    db_constants::{self, GSI1_NAME, GSI2_NAME, LSI_NAME, TABLE_NAME},
+    db_constants::{KeyName, GSI1_NAME, GSI2_NAME, LSI_NAME, TABLE_NAME},
     dto, DbClient,
 };
 
@@ -57,7 +57,7 @@ impl StatQuery {
                 let partition_key = format!("User#{}", user);
                 let sort_key_prefix = format!("Game#{}#Day#{}#Stat#{}", game, day, stat);
 
-                self.query_db(
+                query_db(
                     db_client,
                     None,
                     partition_key,
@@ -75,7 +75,7 @@ impl StatQuery {
                 let partition_key = format!("User#{}", user);
                 let sort_key_prefix = format!("Game#{}#Stat#{}", game, stat);
 
-                self.query_db(
+                query_db(
                     db_client,
                     Some(LSI_NAME),
                     partition_key,
@@ -93,7 +93,7 @@ impl StatQuery {
                 let partition_key = format!("Game#{}#Stat#{}", game, stat);
                 let sort_key_prefix = format!("Day#{}", day);
 
-                self.query_db(
+                query_db(
                     db_client,
                     Some(GSI1_NAME),
                     partition_key,
@@ -106,7 +106,7 @@ impl StatQuery {
                 let partition_key = format!("Game#{}#Stat#{}", game, stat);
                 let sort_key_prefix = format!("Value#");
 
-                self.query_db(
+                query_db(
                     db_client,
                     Some(GSI2_NAME),
                     partition_key,
@@ -117,37 +117,36 @@ impl StatQuery {
             }
         }
     }
+}
 
-    async fn query_db(
-        &self,
-        db_client: DbClient,
-        index: Option<&str>,
-        partition_key: String,
-        sort_key_prefix: String,
-        limit: i32,
-    ) -> Result<Vec<dto::stat_view::StatView>, dto::query_error::QueryError> {
-        let key_names = db_constants::KeyName::from_index_name(index);
-        let (pk_name, sk_name) = key_names.as_tuple();
+async fn query_db(
+    db_client: DbClient,
+    index: Option<&str>,
+    partition_key: String,
+    sort_key_prefix: String,
+    limit: i32,
+) -> Result<Vec<dto::stat_view::StatView>, dto::query_error::QueryError> {
+    let key_names = KeyName::from_index_name(index);
+    let (pk_name, sk_name) = key_names.as_tuple();
 
-        let result = db_client
-            .query()
-            .table_name(TABLE_NAME)
-            .set_index_name(index.map(str::to_string))
-            .key_condition_expression("#pk = :pk AND begins_with (#sk, :sk_prefix)")
-            .expression_attribute_names("#pk", pk_name)
-            .expression_attribute_names("#sk", sk_name)
-            .expression_attribute_values(":pk", AttributeValue::S(partition_key))
-            .expression_attribute_values(":sk_prefix", AttributeValue::S(sort_key_prefix))
-            .scan_index_forward(false)
-            .limit(limit)
-            .send()
-            .await?;
+    let result = db_client
+        .query()
+        .table_name(TABLE_NAME)
+        .set_index_name(index.map(str::to_string))
+        .key_condition_expression("#pk = :pk AND begins_with (#sk, :sk_prefix)")
+        .expression_attribute_names("#pk", pk_name)
+        .expression_attribute_names("#sk", sk_name)
+        .expression_attribute_values(":pk", AttributeValue::S(partition_key))
+        .expression_attribute_values(":sk_prefix", AttributeValue::S(sort_key_prefix))
+        .scan_index_forward(false)
+        .limit(limit)
+        .send()
+        .await?;
 
-        println!("{:?}", result);
+    println!("{:?}", result);
 
-        match result.items() {
-            Some(items) => Ok(items.iter().map(dto::stat_view::StatView::from).collect()),
-            None => Ok(vec![]),
-        }
+    match result.items() {
+        Some(items) => Ok(items.iter().map(dto::stat_view::StatView::from).collect()),
+        None => Ok(vec![]),
     }
 }
