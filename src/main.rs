@@ -23,15 +23,20 @@ async fn main() {
     let add_stat = warp::path("stats")
         .and(warp::post())
         .and(warp::body::json())
-        .and(warp::any().map(move || client.clone()))
+        .and(with_db(client.clone()))
         .and_then(handlers::add_stat::add_stat);
 
     let query_stats = warp::path("stats")
         .and(warp::get())
         .and(warp::query())
+        .and(with_db(client.clone()))
         .and_then(handlers::query_stats::query_stats);
 
     warp::serve(add_stat.or(query_stats))
         .run(([0, 0, 0, 0, 0, 0, 0, 0], 3030))
         .await;
+}
+
+fn with_db(db: DbClient) -> impl Filter<Extract = (DbClient,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || db.clone())
 }

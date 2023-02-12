@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 use aws_sdk_dynamodb::model::AttributeValue;
 
@@ -7,9 +7,9 @@ use crate::time_utils;
 #[derive(serde::Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct StatView<'a> {
-    user: &'a str,
-    game: &'a str,
-    stat: &'a str,
+    user: Cow<'a, str>,
+    game: Cow<'a, str>,
+    stat: Cow<'a, str>,
     value: f64,
     added_timestamp: u128,
     day: u128,
@@ -18,11 +18,11 @@ pub struct StatView<'a> {
 impl<'a> StatView<'a> {
     pub fn new(user: &'a str, game: &'a str, stat: &'a str, value: f64, day: Option<u128>) -> Self {
         Self {
-            user,
-            game,
-            stat,
+            user: Cow::Borrowed(&user),
+            game: Cow::Borrowed(&game),
+            stat: Cow::Borrowed(&stat),
             value,
-            day: day.or(Some(time_utils::get_current_day())).unwrap(),
+            day: day.unwrap_or(time_utils::get_current_day()),
             added_timestamp: time_utils::get_current_timestamp(),
         }
     }
@@ -82,5 +82,48 @@ impl<'a> StatView<'a> {
                 AttributeValue::N(self.added_timestamp.to_string()),
             ),
         ])
+    }
+}
+
+impl<'a> From<&HashMap<String, AttributeValue>> for StatView<'a> {
+    fn from(value: &HashMap<String, AttributeValue>) -> Self {
+        fn get_value<'a>(value: &HashMap<String, AttributeValue>, key: &str) -> Cow<'a, str> {
+            Cow::Owned(
+                value
+                    .get(key)
+                    .expect(&format!("{} not in db item", key))
+                    .as_s()
+                    .expect(&format!(
+                        "Cannot convert {} db field to valid Stat {} field",
+                        key, key
+                    ))
+                    .to_owned(),
+            )
+        }
+
+        fn get_number(value: &HashMap<String, AttributeValue>, key: &str) -> u128 {
+            value
+                .get(key)
+                .expect(&format!("{} not in db item", key))
+                .as_n()
+                .expect(&format!(
+                    "Cannot convert {} db field to valid Stat {} field",
+                    key, key
+                ))
+                .parse()
+                .expect(&format!(
+                    "Cannot convert {} db field to valid Stat {} field",
+                    key, key
+                ))
+        }
+
+        Self {
+            user: get_value(value, "User"),
+            game: get_value(value, "Game"),
+            stat: get_value(value, "Stat"),
+            value: get_number(value, "Value") as f64,
+            added_timestamp: get_number(value, "Timestamp"),
+            day: get_number(value, "Day"),
+        }
     }
 }
