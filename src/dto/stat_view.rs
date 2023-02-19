@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, str::FromStr};
 
 use aws_sdk_dynamodb::model::AttributeValue;
 
@@ -15,6 +15,21 @@ pub struct StatView<'a> {
     day: u128,
 }
 
+fn convert_value_to_storage_value(value: f64) -> String {
+    match value.is_sign_positive() {
+        true => format!("{}#{}", to_bin_pos(value), value),
+        false => format!("{}#{}", to_bin_neg(value), value),
+    }
+}
+
+fn to_bin_pos(n: f64) -> String {
+    format!("{:16x}", n.to_bits() ^ (1 << 63_u64))
+}
+
+fn to_bin_neg(n: f64) -> String {
+    format!("{:016x}", n.to_bits() ^ u64::MAX)
+}
+
 impl<'a> StatView<'a> {
     pub fn new(user: &'a str, game: &'a str, stat: &'a str, value: f64, day: Option<u128>) -> Self {
         Self {
@@ -28,6 +43,8 @@ impl<'a> StatView<'a> {
     }
 
     pub fn as_db_item(&self) -> HashMap<String, AttributeValue> {
+        let storage_value = convert_value_to_storage_value(self.value);
+
         HashMap::from([
             (
                 "PK".to_string(),
@@ -37,7 +54,7 @@ impl<'a> StatView<'a> {
                 "SK".to_string(),
                 AttributeValue::S(format!(
                     "Game#{}#Day#{}#Stat#{}#Value#{}#Timestamp#{}",
-                    self.game, self.day, self.stat, self.value, self.added_timestamp
+                    self.game, self.day, self.stat, storage_value, self.added_timestamp
                 )),
             ),
             (
@@ -55,7 +72,7 @@ impl<'a> StatView<'a> {
                 "GSI1-SK".to_string(),
                 AttributeValue::S(format!(
                     "Day#{}#Value#{}#Timestamp#{}",
-                    self.day, self.value, self.added_timestamp
+                    self.day, storage_value, self.added_timestamp
                 )),
             ),
             (
@@ -66,7 +83,7 @@ impl<'a> StatView<'a> {
                 "GSI2-SK".to_string(),
                 AttributeValue::S(format!(
                     "Value#{}#Timestamp#{}",
-                    self.value, self.added_timestamp
+                    storage_value, self.added_timestamp
                 )),
             ),
             ("User".to_string(), AttributeValue::S(self.user.to_string())),
@@ -87,7 +104,7 @@ impl<'a> StatView<'a> {
 
 impl<'a> From<&HashMap<String, AttributeValue>> for StatView<'a> {
     fn from(value: &HashMap<String, AttributeValue>) -> Self {
-        fn get_value<'a>(value: &HashMap<String, AttributeValue>, key: &str) -> Cow<'a, str> {
+        fn get_string<'a>(value: &HashMap<String, AttributeValue>, key: &str) -> Cow<'a, str> {
             Cow::Owned(
                 value
                     .get(key)
@@ -101,7 +118,23 @@ impl<'a> From<&HashMap<String, AttributeValue>> for StatView<'a> {
             )
         }
 
-        fn get_number(value: &HashMap<String, AttributeValue>, key: &str) -> u128 {
+        fn get_u128(value: &HashMap<String, AttributeValue>, key: &str) -> u128 {
+            value
+                .get(key)
+                .expect(&format!("{} not in db item", key))
+                .as_n()
+                .expect(&format!(
+                    "Cannot convert {} db field to valid Stat {} field",
+                    key, key
+                ))
+                .parse()
+                .expect(&format!(
+                    "Cannot convert {} db field to valid Stat {} field",
+                    key, key
+                ))
+        }
+
+        fn get_f64(value: &HashMap<String, AttributeValue>, key: &str) -> f64 {
             value
                 .get(key)
                 .expect(&format!("{} not in db item", key))
@@ -118,12 +151,12 @@ impl<'a> From<&HashMap<String, AttributeValue>> for StatView<'a> {
         }
 
         Self {
-            user: get_value(value, "User"),
-            game: get_value(value, "Game"),
-            stat: get_value(value, "Stat"),
-            value: get_number(value, "Value") as f64,
-            added_timestamp: get_number(value, "Timestamp"),
-            day: get_number(value, "Day"),
+            user: get_string(value, "User"),
+            game: get_string(value, "Game"),
+            stat: get_string(value, "Stat"),
+            value: get_f64(value, "Value"),
+            added_timestamp: get_u128(value, "Timestamp"),
+            day: get_u128(value, "Day"),
         }
     }
 }

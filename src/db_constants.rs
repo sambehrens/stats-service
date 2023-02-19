@@ -1,5 +1,5 @@
-pub const TABLE_NAME: &str = "StatsDB";
-pub const LSI_NAME: &str = "LSI";
+pub const TABLE_NAME: &str = "StatsDB-Test";
+pub const LSI1_NAME: &str = "LSI1";
 pub const GSI1_NAME: &str = "GSI1";
 pub const GSI2_NAME: &str = "GSI2";
 
@@ -17,9 +17,9 @@ impl KeyName {
                 sk: "SK".to_owned(),
             },
             Some(k) => match k {
-                LSI_NAME => KeyName {
+                LSI1_NAME => KeyName {
                     pk: "PK".to_owned(),
-                    sk: "LSI-SK".to_owned(),
+                    sk: "LSI1-SK".to_owned(),
                 },
                 GSI1_NAME => KeyName {
                     pk: "GSI1-PK".to_owned(),

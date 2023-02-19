@@ -1,5 +1,5 @@
 use crate::{
-    db_constants::{KeyName, GSI1_NAME, GSI2_NAME, LSI_NAME, TABLE_NAME},
+    db_constants::{KeyName, GSI1_NAME, GSI2_NAME, LSI1_NAME, TABLE_NAME},
     dto, DbClient,
 };
 
@@ -77,7 +77,7 @@ impl StatQuery {
 
                 query_db(
                     db_client,
-                    Some(LSI_NAME),
+                    Some(LSI1_NAME),
                     partition_key,
                     sort_key_prefix,
                     count.parse()?,

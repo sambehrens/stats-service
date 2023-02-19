@@ -6,13 +6,12 @@ pub async fn add_stat(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let stat = body.as_stat_view();
 
-    let request = client.put_item().table_name(db_constants::TABLE_NAME);
-
-    let request = request.set_item(Some(stat.as_db_item()));
-
-    println!("{:?}", request);
-
-    let response = request.send().await;
+    let response = client
+        .put_item()
+        .table_name(db_constants::TABLE_NAME)
+        .set_item(Some(stat.as_db_item()))
+        .send()
+        .await;
 
     match response {
         Ok(success_response) => {
