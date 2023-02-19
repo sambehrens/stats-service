@@ -17,8 +17,8 @@ pub struct StatView<'a> {
 
 fn convert_value_to_storage_value(value: f64) -> String {
     match value.is_sign_positive() {
-        true => format!("{}#{}", to_bin_pos(value), value),
-        false => format!("{}#{}", to_bin_neg(value), value),
+        true => to_bin_pos(value),
+        false => to_bin_neg(value),
     }
 }
 
@@ -60,8 +60,8 @@ impl<'a> StatView<'a> {
             (
                 "LSI-SK".to_string(),
                 AttributeValue::S(format!(
-                    "Game#{}#Stat#{}#Value#{}",
-                    self.game, self.stat, self.value
+                    "Game#{}#Stat#{}#Value#{}#Timestamp#{}",
+                    self.game, self.stat, self.value, self.added_timestamp
                 )),
             ),
             (

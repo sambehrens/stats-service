@@ -6,39 +6,80 @@ use crate::{
 use aws_sdk_dynamodb::model::AttributeValue;
 
 #[derive(serde::Deserialize, Debug)]
-#[serde(deny_unknown_fields, untagged)]
+#[serde(rename_all = "camelCase")]
+pub enum Sort {
+    Ascending,
+    Descending,
+}
+impl Default for Sort {
+    fn default() -> Self {
+        Sort::Descending
+    }
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct Count(String);
+impl Default for Count {
+    fn default() -> Self {
+        Count("1".to_owned())
+    }
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct UserDailyHighScoreQuery {
+    user: String,
+    game: String,
+    stat: String,
+    day: String,
+    #[serde(default)]
+    count: Count,
+    #[serde(default)]
+    sort: Sort,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct UserHighScoreQuery {
+    user: String,
+    game: String,
+    stat: String,
+    #[serde(default)]
+    count: Count,
+    #[serde(default)]
+    sort: Sort,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct DailyHighScoreQuery {
+    game: String,
+    stat: String,
+    day: String,
+    #[serde(default)]
+    count: Count,
+    #[serde(default)]
+    sort: Sort,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct UniversalHighScoreQuery {
+    game: String,
+    stat: String,
+    #[serde(default)]
+    count: Count,
+    #[serde(default)]
+    sort: Sort,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(untagged)]
 pub enum StatQuery {
-    #[serde(rename_all = "camelCase")]
-    UserDailyHighScoreQuery {
-        user: String,
-        game: String,
-        stat: String,
-        day: String,
-        count: String,
-    },
-
-    #[serde(rename_all = "camelCase")]
-    UserHighScoreQuery {
-        user: String,
-        game: String,
-        stat: String,
-        count: String,
-    },
-
-    #[serde(rename_all = "camelCase")]
-    DailyHighScoreQuery {
-        game: String,
-        stat: String,
-        day: String,
-        count: String,
-    },
-
-    #[serde(rename_all = "camelCase")]
-    UniversalHighScoreQuery {
-        game: String,
-        stat: String,
-        count: String,
-    },
+    UserDailyHighScoreQuery(UserDailyHighScoreQuery),
+    UserHighScoreQuery(UserHighScoreQuery),
+    DailyHighScoreQuery(DailyHighScoreQuery),
+    UniversalHighScoreQuery(UniversalHighScoreQuery),
 }
 
 impl StatQuery {
@@ -47,63 +88,50 @@ impl StatQuery {
         db_client: DbClient,
     ) -> Result<Vec<dto::stat_view::StatView>, dto::query_error::QueryError> {
         match self {
-            StatQuery::UserDailyHighScoreQuery {
-                user,
-                game,
-                stat,
-                day,
-                count,
-            } => {
-                let partition_key = format!("User#{}", user);
-                let sort_key_prefix = format!("Game#{}#Day#{}#Stat#{}", game, day, stat);
+            StatQuery::UserDailyHighScoreQuery(q) => {
+                let partition_key = format!("User#{}", q.user);
+                let sort_key_prefix = format!("Game#{}#Day#{}#Stat#{}", q.game, q.day, q.stat);
 
                 query_db(
                     db_client,
                     None,
                     partition_key,
                     sort_key_prefix,
-                    count.parse()?,
+                    &q.count,
+                    &q.sort,
                 )
                 .await
             }
-            StatQuery::UserHighScoreQuery {
-                user,
-                game,
-                stat,
-                count,
-            } => {
-                let partition_key = format!("User#{}", user);
-                let sort_key_prefix = format!("Game#{}#Stat#{}", game, stat);
+            StatQuery::UserHighScoreQuery(q) => {
+                let partition_key = format!("User#{}", q.user);
+                let sort_key_prefix = format!("Game#{}#Stat#{}", q.game, q.stat);
 
                 query_db(
                     db_client,
                     Some(LSI1_NAME),
                     partition_key,
                     sort_key_prefix,
-                    count.parse()?,
+                    &q.count,
+                    &q.sort,
                 )
                 .await
             }
-            StatQuery::DailyHighScoreQuery {
-                game,
-                stat,
-                day,
-                count,
-            } => {
-                let partition_key = format!("Game#{}#Stat#{}", game, stat);
-                let sort_key_prefix = format!("Day#{}", day);
+            StatQuery::DailyHighScoreQuery(q) => {
+                let partition_key = format!("Game#{}#Stat#{}", q.game, q.stat);
+                let sort_key_prefix = format!("Day#{}", q.day);
 
                 query_db(
                     db_client,
                     Some(GSI1_NAME),
                     partition_key,
                     sort_key_prefix,
-                    count.parse()?,
+                    &q.count,
+                    &q.sort,
                 )
                 .await
             }
-            StatQuery::UniversalHighScoreQuery { game, stat, count } => {
-                let partition_key = format!("Game#{}#Stat#{}", game, stat);
+            StatQuery::UniversalHighScoreQuery(q) => {
+                let partition_key = format!("Game#{}#Stat#{}", q.game, q.stat);
                 let sort_key_prefix = format!("Value#");
 
                 query_db(
@@ -111,7 +139,8 @@ impl StatQuery {
                     Some(GSI2_NAME),
                     partition_key,
                     sort_key_prefix,
-                    count.parse()?,
+                    &q.count,
+                    &q.sort,
                 )
                 .await
             }
@@ -119,13 +148,14 @@ impl StatQuery {
     }
 }
 
-async fn query_db(
+async fn query_db<'a>(
     db_client: DbClient,
     index: Option<&str>,
     partition_key: String,
     sort_key_prefix: String,
-    limit: i32,
-) -> Result<Vec<dto::stat_view::StatView>, dto::query_error::QueryError> {
+    limit: &'a Count,
+    sort: &'a Sort,
+) -> Result<Vec<dto::stat_view::StatView<'a>>, dto::query_error::QueryError> {
     let key_names = KeyName::from_index_name(index);
     let (pk_name, sk_name) = key_names.as_tuple();
 
@@ -138,8 +168,8 @@ async fn query_db(
         .expression_attribute_names("#sk", sk_name)
         .expression_attribute_values(":pk", AttributeValue::S(partition_key))
         .expression_attribute_values(":sk_prefix", AttributeValue::S(sort_key_prefix))
-        .scan_index_forward(false)
-        .limit(limit)
+        .scan_index_forward(matches!(sort, Sort::Ascending))
+        .limit(limit.0.parse()?)
         .send()
         .await?;
 
